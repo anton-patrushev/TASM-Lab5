@@ -5,12 +5,13 @@
 .data
   buffer_size equ 50
 
-  ; file_name db buffer_size dup (0)
-  temp db buffer_size dup ('$')
+  ; temp db buffer_size dup ('$')
+  ; first_file_name db "c:\Lab5\file3.bin", 0, '$' ;mock
+  ; second_file_name db "c:\Lab5\file2.bin", 0, '$' ;mock
   first_file_descriptor dw 0
-  first_file_name db "c:\Lab5\file3.bin", 0, '$' ;mock
   second_file_descriptor dw 0
-  second_file_name db "c:\Lab5\file2.bin", 0, '$' ;mock
+  first_file_name db buffer_size dup ('$')
+  second_file_name db buffer_size dup ('$')
 
   endl db 10, 13, '$'
   error_parsing db "Failed to parse command line args", 10, 13, '$'
@@ -105,7 +106,7 @@ close_file proc
   mov bx, ss:[bp + 4]
   int 21h
 
-  je close_file_error
+  jc close_file_error
 
   call_log file
   mov bx, ss:[bp + 6] ;get file name
@@ -141,28 +142,134 @@ parse_command_line proc
 
   mov bx, es:[80h] ; cli args line
   add bx, 80h
-  mov si, 82h
+  mov di, 81h
   
-  cmp si, bx
+  cmp di, bx
   jae bad_args
-
+  jmp parse_command_line_continue
   
   bad_args:
   call_log error_parsing
   exit
+
+  parse_command_line_continue:
+  mov al, ' '
+  repz scasb ; skip all spaces
+  dec di
+  push di
+
+  bin_end:
+    cmp byte ptr es:[di], '.'
+    jne bin_end_next_iteration
+    inc di
+    
+    cmp byte ptr es:[di], 'b'
+    je i_character
+    cmp byte ptr es:[di], 'B'
+    jne bin_end_next_iteration
+    
+    i_character:
+    inc di
+    
+    cmp byte ptr es:[di], 'i'
+    je n_character
+    cmp byte ptr es:[di], 'I'
+    jne bin_end_next_iteration
+
+    n_character:
+    inc di
+    
+    cmp byte ptr es:[di], 'n'
+    je first_name_end
+    cmp byte ptr es:[di], 'N'
+    jne bin_end_next_iteration
+    jmp first_name_end
+    
+    bin_end_next_iteration:
+    inc di
+  jmp bin_end
+
+  first_name_end:
+  inc di
+  mov bx, di
+  pop di
+
+  mov si, offset first_file_name
+  copy_first_name:
+    mov dl, byte ptr es:[di]
+    mov byte ptr ds:[si], dl
+    inc si
+    inc di
+    cmp di, bx
+  jne copy_first_name
+  mov byte ptr ds:[si], 0
+
+  mov al, ' '
+  repz scasb ; skip all spaces
+  dec di
+  push di
+
+  _bin_end:
+    cmp byte ptr es:[di], '.'
+    jne _bin_end_next_iteration
+    inc di
+    
+    cmp byte ptr es:[di], 'b'
+    je _i_character
+    cmp byte ptr es:[di], 'B'
+    jne _bin_end_next_iteration
+    
+    _i_character:
+    inc di
+    
+    cmp byte ptr es:[di], 'i'
+    je _n_character
+    cmp byte ptr es:[di], 'I'
+    jne _bin_end_next_iteration
+
+    _n_character:
+    inc di
+    
+    cmp byte ptr es:[di], 'n'
+    je second_name_end
+    cmp byte ptr es:[di], 'N'
+    jne _bin_end_next_iteration
+    jmp second_name_end
+    
+    _bin_end_next_iteration:
+    inc di
+  jmp _bin_end
+
+  second_name_end:
+  inc di
+  mov bx, di
+  pop di
+
+  mov si, offset second_file_name
+  copy_second_name:
+    mov dl, byte ptr es:[di]
+    mov byte ptr ds:[si], dl
+    inc si
+    inc di
+    cmp di, bx
+  jne copy_second_name
+  mov byte ptr ds:[si], 0
   
+  parse_command_line_end:
   ret
 endp
 
 start:
   init
 
-  ;parse_command_line
+  call parse_command_line
 
   call_open_file first_file_name, first_file_descriptor
+  call_open_file second_file_name, second_file_descriptor
 
-  ;working stuff
+  ;comparing stuff
 
   call_close_file first_file_name, first_file_descriptor
+  call_close_file second_file_name, second_file_descriptor
   exit
 end start
