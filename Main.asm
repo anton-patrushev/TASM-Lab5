@@ -1,19 +1,28 @@
-; .286
+.286
 .model small
 .stack 100h
 
 .data
-  buffer_size equ 50
+  buffer_size equ 25
 
-  ; temp db buffer_size dup ('$')
   ; first_file_name db "c:\Lab5\file3.bin", 0, '$' ;mock
   ; second_file_name db "c:\Lab5\file2.bin", 0, '$' ;mock
   first_file_descriptor dw 0
   second_file_descriptor dw 0
   first_file_name db buffer_size dup ('$')
   second_file_name db buffer_size dup ('$')
+  ; temp db buffer_size dup ('$')
+  temp db 0
+  _temp db 0
+
+  plus db '+', '$'
+
+  first_eof db 0
+  second_eof db 0
 
   endl db 10, 13, '$'
+  non_error db "Non ", '$'
+  equal_message db "Equal!", 10, 13, '$'
   error_parsing db "Failed to parse command line args", 10, 13, '$'
   file db "File ", '$'
   successful_open db "was successfully opened", 10, 13, '$'
@@ -259,6 +268,67 @@ parse_command_line proc
   ret
 endp
 
+compare_files proc
+  pusha
+  compare_files_loop:
+    push cx
+    mov dx, offset temp
+    mov bx, word ptr ds:[first_file_descriptor]
+    mov cx, 1
+    mov ah, 3fh
+    int 21h
+    mov si, ax
+
+    mov dx, offset _temp
+    mov bx, word ptr ds:[second_file_descriptor]
+    mov cx, 1
+    mov ah, 3fh
+    int 21h
+    mov di, ax
+
+    pop cx
+    mov al, byte ptr ds:[temp]
+    cmp al, byte ptr ds:[_temp]
+    jne compare_files_non_equal
+
+    cmp si, 0 ;read zero chars
+    jne skip_setting_first_eof
+    mov byte ptr ds:[first_eof], 1
+    call_log plus
+
+    skip_setting_first_eof:
+    cmp di, 0 ;read zero chars
+    jne skip_setting_second_eof
+    mov byte ptr ds:[second_eof], 1
+    call_log plus
+
+    skip_setting_second_eof:
+    
+    cmp byte ptr ds:[first_eof], 1
+    jne skip_checking_second_eof
+    cmp byte ptr ds:[second_eof], 1
+    je compare_files_equal
+    jne compare_files_non_equal
+
+    skip_checking_second_eof:
+    cmp byte ptr ds:[second_eof], 1
+    je compare_files_non_equal
+
+  jmp compare_files_loop
+
+  compare_files_non_equal:
+  call_log non_error
+  call_log equal_message
+  jmp compare_files_end
+
+  compare_files_equal:
+  call_log equal_message
+  
+  compare_files_end:
+  popa
+  ret
+endp
+
 start:
   init
 
@@ -267,9 +337,9 @@ start:
   call_open_file first_file_name, first_file_descriptor
   call_open_file second_file_name, second_file_descriptor
 
-  ;comparing stuff
+  call compare_files
 
-  call_close_file first_file_name, first_file_descriptor
   call_close_file second_file_name, second_file_descriptor
+  call_close_file first_file_name, first_file_descriptor
   exit
 end start
